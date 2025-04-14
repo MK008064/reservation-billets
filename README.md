@@ -1,18 +1,41 @@
-﻿# reservation-billets
+# app_fixed.py
 from flask import Flask, render_template, redirect, url_for, request, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 
+basedir = os.path.abspath(os.path.dirname(__file__))
+
 app = Flask(__name__)
-app.config.from_pyfile('config.py')
+app.config['SECRET_KEY'] = 'secret'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'instance', 'reservation.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-from models import Utilisateur, Evenement, Reservation
+class Utilisateur(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    nom = db.Column(db.String(100))
+    email = db.Column(db.String(100), unique=True)
+    mot_de_passe = db.Column(db.String(200))
+
+class Evenement(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    titre = db.Column(db.String(200))
+    description = db.Column(db.String(300))
+    places_disponibles = db.Column(db.Integer)
+
+class Reservation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    utilisateur_id = db.Column(db.Integer, db.ForeignKey('utilisateur.id'))
+    evenement_id = db.Column(db.Integer, db.ForeignKey('evenement.id'))
+    statut = db.Column(db.String(50), default='confirmé')
+    
+    utilisateur = db.relationship('Utilisateur', backref='reservations')
+    evenement = db.relationship('Evenement', backref='reservations')
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -113,23 +136,3 @@ if __name__ == '__main__':
     with app.app_context():
         db.create_all()
     app.run(debug=True)
-
-
-# reservation-billets/templates/mes_reservations.html
-{% extends 'base.html' %}
-{% block title %}Mes réservations{% endblock %}
-{% block content %}
-<h2>Mes réservations</h2>
-<ul>
-  {% for res in reservations %}
-    <li>
-      Événement : {{ res.evenement.titre }} - Statut : {{ res.statut }}
-      {% if res.statut == 'confirmé' %}
-        | <a href="{{ url_for('annuler_reservation', reservation_id=res.id) }}">Annuler</a>
-      {% endif %}
-    </li>
-  {% else %}
-    <li>Aucune réservation trouvée.</li>
-  {% endfor %}
-</ul>
-{% endblock %}
